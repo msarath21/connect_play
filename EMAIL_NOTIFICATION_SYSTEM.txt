@@ -1,0 +1,420 @@
+============================================================
+TIC-TAC-TOE GAME EMAIL NOTIFICATION SYSTEM
+============================================================
+
+OVERVIEW
+--------
+The TicTacToe game includes an automated email notification system that sends 
+players an email summary of their game results whenever a game concludes. 
+These emails include the game outcome (win/loss/draw), opponent information, 
+and overall player statistics.
+
+VISUAL DIAGRAMS
+--------------
+
+## 1. SYSTEM ARCHITECTURE DIAGRAM
+
+```
+┌─────────────────────┐       HTTP        ┌─────────────────────┐       SMTP       ┌─────────────────┐
+│                     │      Request      │                     │                  │                 │
+│  TIC-TAC-TOE APP    │ ───────────────▶ │  LOCAL NODE SERVER  │ ───────────────▶ │  GMAIL SERVER   │
+│  (TicTacToeGame.tsx)│ ◀─────────────── │  (LocalServerSetup.js)│ ◀─────────────── │                 │
+│                     │      Response     │                     │                  │                 │
+└─────────────────────┘                   └─────────────────────┘                  └─────────────────┘
+        │                                          │                                       │
+        │                                          │                                       │
+        ▼                                          ▼                                       ▼
+┌─────────────────────┐               ┌─────────────────────┐               ┌─────────────────────┐
+│    GAME STATE       │               │   SERVER PROCESSES  │               │    EMAIL DELIVERY   │
+│ - Player info       │               │ - JSON parsing      │               │ - Recipient inbox   │
+│ - Game results      │               │ - Email generation  │               │ - Gmail sending     │
+│ - Statistics        │               │ - Error handling    │               │ - Spam filtering    │
+└─────────────────────┘               └─────────────────────┘               └─────────────────────┘
+```
+
+## 2. EMAIL NOTIFICATION FLOW DIAGRAM
+
+```
+┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+│            │     │            │     │            │     │            │     │            │
+│  GAME ENDS │────▶│ SAVE GAME  │────▶│  GET USER  │────▶│  CONNECT   │────▶│  GENERATE  │
+│            │     │  RESULTS   │     │  STATS     │     │  TO SERVER │     │  EMAIL     │
+│            │     │            │     │            │     │            │     │            │
+└────────────┘     └────────────┘     └────────────┘     └────────────┘     └────────────┘
+                                                                                   │
+                                                                                   ▼
+┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+│            │     │            │     │            │     │            │     │            │
+│  PLAYER    │◀────│   SEND     │◀────│  FORMAT    │◀────│   INJECT   │◀────│  PROCESS   │
+│  RECEIVES  │     │   EMAIL    │     │  EMAIL     │     │   DATA     │     │  REQUEST   │
+│            │     │            │     │            │     │            │     │            │
+└────────────┘     └────────────┘     └────────────┘     └────────────┘     └────────────┘
+```
+
+## 3. DATA FLOW DIAGRAM
+
+```
+┌───────────────────────────────┐
+│          GAME DATA            │
+│                               │
+│  ┌─────────────┐              │
+│  │ Winner Info │              │
+│  └─────────────┘              │
+│         │                     │
+│         ▼                     │
+│  ┌─────────────┐    ┌──────────┐
+│  │ Player Data │───▶│ Game     │
+│  └─────────────┘    │ Results  │
+│         ▲           └──────────┘
+│         │                │      
+│  ┌─────────────┐         │      
+│  │ Game Stats  │◀────────┘      
+│  └─────────────┘                
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│        SERVER PROCESSING      │
+│                               │
+│  ┌─────────────┐              │
+│  │  Receive    │              │
+│  │  HTTP Req   │              │
+│  └─────────────┘              │
+│         │                     │
+│         ▼                     │
+│  ┌─────────────┐    ┌──────────┐
+│  │  Parse JSON │───▶│ Generate │
+│  └─────────────┘    │ HTML     │
+│                     └──────────┘
+│                          │      
+│  ┌─────────────┐         │      
+│  │  Send Email │◀────────┘      
+│  └─────────────┘                
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│          EMAIL FORMAT         │
+│  ┌───────────────────────┐    │
+│  │ HEADER: Game Results  │    │
+│  ├───────────────────────┤    │
+│  │ Hello [Player Name],  │    │
+│  │                       │    │
+│  │ Your game with [Opp]  │    │
+│  │ has ended.            │    │
+│  │                       │    │
+│  │ Result: [Win/Loss]    │    │
+│  ├───────────────────────┤    │
+│  │ STATS:                │    │
+│  │ Games: 10             │    │
+│  │ Wins: 7               │    │
+│  │ Win Rate: 70%         │    │
+│  └───────────────────────┘    │
+└───────────────────────────────┘
+```
+
+## 4. SERVER-CLIENT COMMUNICATION DIAGRAM
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ TIC-TAC-TOE APP                                         │
+│                                                         │
+│  1. Game ends                                           │
+│  2. Collect game data                                   │
+│  3. Format POST request                                 │
+│                                                         │
+│  POST Request to: http://[SERVER_IP]:3000/send-game-notification  │
+│  ┌────────────────────────────────────┐                 │
+│  │ {                                   │                 │
+│  │   "recipientEmail": "user@gmail.com",                │
+│  │   "playerName": "Player A",         │                 │
+│  │   "opponentName": "Player B",       │                 │
+│  │   "result": "win",                  │                 │
+│  │   "gameStats": {                    │                 │
+│  │     "gamesPlayed": 10,              │                 │
+│  │     "wins": 7,                      │                 │
+│  │     "winRate": 70                   │                 │
+│  │   }                                 │                 │
+│  │ }                                   │                 │
+│  └────────────────────────────────────┘                 │
+└───────────────────────┬─────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│ LOCAL SERVER                                            │
+│                                                         │
+│  1. Receive POST request                                │
+│  2. Parse JSON data                                     │
+│  3. Generate HTML email                                 │
+│  4. Configure email options                             │
+│  5. Send via Nodemailer                                 │
+│                                                         │
+│  Response to App:                                       │
+│  ┌────────────────────────────────────┐                 │
+│  │ {                                   │                 │
+│  │   "success": true,                  │                 │
+│  │   "message": "Email sent successfully",              │
+│  │   "emailId": "1234567890"           │                 │
+│  │ }                                   │                 │
+│  └────────────────────────────────────┘                 │
+└───────────────────────┬─────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│ EMAIL SERVICE (GMAIL)                                   │
+│                                                         │
+│  1. Process email request                               │
+│  2. Apply formatting                                    │
+│  3. Route to recipient                                  │
+│  4. Deliver to inbox                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 5. EMAIL EXAMPLE MOCKUP
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ⤹ From: TicTacToe Game <your-email@gmail.com>           ┃
+┃ ⤹ To: player@gmail.com                                  ┃
+┃ ⤹ Subject: TicTacToe Game Results: You Won!             ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃                                                         ┃
+┃       ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓        ┃
+┃       ┃          TicTacToe Game Results         ┃        ┃
+┃       ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛        ┃
+┃                                                         ┃
+┃                     ** YOU WON! **                      ┃
+┃                                                         ┃
+┃       Hello Player A,                                   ┃
+┃                                                         ┃
+┃       Your game with Player B has ended.                ┃
+┃                                                         ┃
+┃       ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓        ┃
+┃       ┃ Game Statistics:                        ┃        ┃
+┃       ┃ • Games Played: 10                      ┃        ┃
+┃       ┃ • Total Wins: 7                         ┃        ┃
+┃       ┃ • Win Rate: 70%                         ┃        ┃
+┃       ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛        ┃
+┃                                                         ┃
+┃       Thank you for playing TicTacToe!                  ┃
+┃                                                         ┃
+┃       This is an automated message.                     ┃
+┃       Please do not reply to this email.                ┃
+┃                                                         ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+## 6. SETUP FLOW DIAGRAM
+
+```
+┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+│            │     │            │     │            │     │            │
+│  INSTALL   │────▶│ CONFIGURE  │────▶│  START     │────▶│ CONFIGURE  │
+│ NODEMAILER │     │   EMAIL    │     │  SERVER    │     │ SERVER URL │
+│            │     │            │     │            │     │            │
+└────────────┘     └────────────┘     └────────────┘     └────────────┘
+     npm             Gmail App          node.js           App Drawer
+   install           Password         LocalServer        Settings
+
+
+    npm install      Gmail 2-Step      Shows IPs:        In app:
+      --save          Verification    192.168.x.x:3000   Configure 
+    nodemailer           ↓                ↓               Server
+        ↓            App Password      Server             ↓
+    Package.json      Generation      Running          http://IP:3000
+```
+
+TECHNICAL ARCHITECTURE
+---------------------
+The email notification system uses a client-server architecture:
+
+1. CLIENT SIDE (TicTacToeGame.tsx):
+   - Tracks game results and player statistics
+   - Communicates with the local server to send email details
+   - Uses AsyncStorage to maintain server URL configuration
+
+2. SERVER SIDE (LocalServerSetup.js):
+   - Runs a Node.js Express server
+   - Uses Nodemailer package to send emails
+   - Provides a REST API endpoint for email notifications
+   - Formats HTML emails with game statistics
+
+SETUP INSTRUCTIONS
+-----------------
+1. SERVER CONFIGURATION:
+
+   a) Install required package:
+      ```
+      npm install --save nodemailer
+      ```
+
+   b) Configure email credentials in LocalServerSetup.js:
+      ```javascript
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'your-email@gmail.com',
+          pass: 'your-app-password' 
+        }
+      });
+      
+      // Later in the code, update the from field:
+      const mailOptions = {
+        from: '"TicTacToe Game" <your-email@gmail.com>',
+        // other options...
+      };
+      ```
+
+   c) For Gmail accounts:
+      - Enable 2-Step Verification
+      - Generate an App Password
+      - Use the App Password in the configuration
+
+2. SERVER STARTUP:
+
+   Start the server by running:
+   ```
+   node LocalServerSetup.js
+   ```
+
+   The server will display its IP addresses when started.
+
+3. CLIENT CONFIGURATION:
+
+   Configure the server URL in the app via:
+   - Drawer menu → Configure Server
+   - Enter the server URL (e.g., http://192.168.x.x:3000)
+
+EMAIL NOTIFICATION PROCESS
+-------------------------
+1. GAME COMPLETION:
+   - When a game ends, the saveGameResult() function is called
+   - The function determines the winner and game statistics
+
+2. DATA RETRIEVAL:
+   - Player information is retrieved from the game state
+   - User statistics are fetched from Firebase
+   - Email address is obtained from Firebase Authentication
+
+3. SERVER CONNECTION:
+   - The app locates the server URL from AsyncStorage
+   - If not found, it tries several common IP patterns
+   - When found, it sends a POST request to the /send-game-notification endpoint
+
+4. EMAIL GENERATION:
+   - The server receives the notification request
+   - It generates an HTML email with game results and statistics
+   - The email is styled with CSS for improved readability
+
+5. EMAIL SENDING:
+   - Nodemailer sends the email from the configured Gmail account
+   - The recipient is the player's registered email address
+   - The email subject indicates the game result (win/loss/draw)
+
+6. FEEDBACK & ERROR HANDLING:
+   - The server returns a JSON response indicating success or failure
+   - The app logs the email notification result
+   - Errors are caught and logged but don't disrupt the game experience
+
+CODE STRUCTURE
+-------------
+1. SERVER CODE (LocalServerSetup.js):
+
+   a) Email configuration:
+      ```javascript
+      const transporter = nodemailer.createTransport({...});
+      ```
+
+   b) Email endpoint:
+      ```javascript
+      app.post('/send-game-notification', (req, res) => {...});
+      ```
+
+   c) HTML email template:
+      ```javascript
+      const htmlContent = `
+        <html>
+          <head>
+            <style>
+              // CSS styling for email
+            </style>
+          </head>
+          <body>
+            // Email content
+          </body>
+        </html>
+      `;
+      ```
+
+2. CLIENT CODE (TicTacToeGame.tsx):
+
+   a) Server URL retrieval:
+      ```javascript
+      // Get server URL from AsyncStorage or try common IPs
+      let serverUrl = null;
+      const storedUrl = await AsyncStorage.getItem('server_url');
+      // If not found, try other methods...
+      ```
+
+   b) Email notification request:
+      ```javascript
+      const response = await fetch(`${serverUrl}/send-game-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipientEmail: user.email,
+          playerName: playerA.name,
+          opponentName: playerB.name,
+          result: result,
+          gameStats: gameStats
+        }),
+      });
+      ```
+
+TROUBLESHOOTING
+--------------
+1. EMAIL NOT SENDING:
+   - Verify the server is running (node LocalServerSetup.js)
+   - Check server console for errors
+   - Ensure Gmail credentials are correct
+   - Confirm the App Password is entered correctly
+   - Verify that less secure app access is enabled if using regular password
+
+2. SERVER CONNECTION ISSUES:
+   - Ensure device and server are on the same network
+   - Try configuring the server URL manually
+   - Check for firewall restrictions
+   - Verify the correct port is being used (default: 3000)
+
+3. CLIENT-SIDE ERRORS:
+   - Check app logs for "Network request failed" errors
+   - Verify AsyncStorage is correctly storing the server URL
+   - Ensure Firebase Authentication contains a valid email
+
+4. GMAIL SPECIFIC ISSUES:
+   - Check if Google is blocking sign-in attempts
+   - Verify 2-Step Verification is enabled
+   - Ensure the App Password is generated specifically for this app
+   - Check Gmail sending limits (2000 emails per day)
+
+CUSTOMIZATION
+------------
+1. EMAIL APPEARANCE:
+   Modify the HTML template in LocalServerSetup.js to change:
+   - Colors and styling
+   - Layout and content
+   - Font styles
+
+2. ADDITIONAL DATA:
+   Update the notification endpoint to include more game data:
+   - Game duration
+   - Move history
+   - Player rankings
+
+3. NOTIFICATION TRIGGERS:
+   Modify when emails are sent by changing the client code:
+   - Only send for certain game types
+   - Add user preference to opt-in/opt-out
+   - Send weekly summaries instead of per-game
+
+============================================================ 
